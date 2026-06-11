@@ -3,6 +3,8 @@
     {
       "contract_id": "合同001_正常合同",
       "file_path": "contracts\\合同001_正常合同.txt",
+      "file_mtime": 1781175437.8870134,
+      "scan_batch_id": "batch_20260611_193303",
       "room_number": "3-1-1502",
       "tenant_name": "李明",
       "tenant_id_number": "310101199205124567",
@@ -23,25 +25,39 @@
           "issue_type": "invalid_id_number",
           "description": "承租方身份证号格式错误: 310101199205124567",
           "risk_level": "high",
-          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码"
+          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "出租方身份证号格式错误: 110101199003078732",
-          "risk_level": "medium",
-          "suggestion": "请核实出租方身份证号并重新填写"
+          "risk_level": "high",
+          "suggestion": "请核实出租方身份证号并重新填写",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "lease_overlap",
           "description": "房源[3-1-1502]租期重叠: 与合同[合同003_租期重叠_租金异常]租期重叠 (2025-06-01 ~ 2026-05-31)",
           "risk_level": "high",
-          "suggestion": "请核实该房源是否同时租给多方，及时处理一房多租问题"
+          "suggestion": "请核实该房源是否同时租给多方，及时处理一房多租问题",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         }
-      ]
+      ],
+      "review_notes": "",
+      "first_scan_time": "2026-06-11T19:33:03.567296",
+      "last_scan_time": "2026-06-11T19:33:03.973228"
     },
     {
       "contract_id": "合同002_缺租客签名_身份证错误",
       "file_path": "contracts\\合同002_缺租客签名_身份证错误.txt",
+      "file_mtime": 1781175442.277598,
+      "scan_batch_id": "batch_20260611_193303",
       "room_number": "3-1-1805",
       "tenant_name": "陈小红",
       "tenant_id_number": "",
@@ -62,25 +78,39 @@
           "issue_type": "missing_signature",
           "description": "缺少签名: 承租方(租客)",
           "risk_level": "high",
-          "suggestion": "请联系承租方(租客)补签合同"
+          "suggestion": "请联系承租方(租客)补签合同",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "承租方身份证号缺失",
           "risk_level": "high",
-          "suggestion": "请补充承租方身份证号码"
+          "suggestion": "请补充承租方身份证号码",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "出租方身份证号格式错误: 110102197508153241",
-          "risk_level": "medium",
-          "suggestion": "请核实出租方身份证号并重新填写"
+          "risk_level": "high",
+          "suggestion": "请核实出租方身份证号并重新填写",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         }
-      ]
+      ],
+      "review_notes": "",
+      "first_scan_time": "2026-06-11T19:33:03.567296",
+      "last_scan_time": "2026-06-11T19:33:03.973228"
     },
     {
       "contract_id": "合同003_租期重叠_租金异常",
       "file_path": "contracts\\合同003_租期重叠_租金异常.txt",
+      "file_mtime": 1781175446.8540099,
+      "scan_batch_id": "batch_20260611_193303",
       "room_number": "3-1-1502",
       "tenant_name": "孙强",
       "tenant_id_number": "320102198807191234",
@@ -100,32 +130,49 @@
         {
           "issue_type": "abnormal_rent",
           "description": "租金异常偏高/偏低: 月租金8800元, 同房源平均租金5800元, 偏离51.7%",
-          "risk_level": "medium",
-          "suggestion": "请核实租金金额是否正确，确认是否有特殊约定"
+          "risk_level": "high",
+          "suggestion": "请核实租金金额是否正确，确认是否有特殊约定",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "承租方身份证号格式错误: 320102198807191234",
           "risk_level": "high",
-          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码"
+          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "出租方身份证号格式错误: 110105196804226543",
-          "risk_level": "medium",
-          "suggestion": "请核实出租方身份证号并重新填写"
+          "risk_level": "high",
+          "suggestion": "请核实出租方身份证号并重新填写",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "lease_overlap",
           "description": "房源[3-1-1502]租期重叠: 与合同[合同001_正常合同]租期重叠 (2025-01-01 ~ 2025-12-31)",
           "risk_level": "high",
-          "suggestion": "请核实该房源是否同时租给多方，及时处理一房多租问题"
+          "suggestion": "请核实该房源是否同时租给多方，及时处理一房多租问题",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         }
-      ]
+      ],
+      "review_notes": "",
+      "first_scan_time": "2026-06-11T19:33:03.567296",
+      "last_scan_time": "2026-06-11T19:33:03.973228"
     },
     {
       "contract_id": "合同004_日期冲突_缺签名_租金0",
       "file_path": "contracts\\合同004_日期冲突_缺签名_租金0.txt",
+      "file_mtime": 1781175459.584929,
+      "scan_batch_id": "batch_20260611_193303",
       "room_number": "A-801",
       "tenant_name": "吴磊",
       "tenant_id_number": "510104199006253472",
@@ -144,45 +191,68 @@
       "issues": [
         {
           "issue_type": "missing_signature",
-          "description": "缺少签名: 承租方(租客), 出租方(房东)",
+          "description": "缺少签名: 承租方(租客), 出租方(房东), 经纪人(居间方)",
           "risk_level": "high",
-          "suggestion": "请联系承租方(租客), 出租方(房东)补签合同"
+          "suggestion": "请联系承租方(租客), 出租方(房东), 经纪人(居间方)补签合同",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "date_conflict",
           "description": "租期日期冲突: 结束日期(2025-01-15)早于或等于开始日期(2025-07-15)",
           "risk_level": "high",
-          "suggestion": "请核对并修正租期的开始和结束日期"
+          "suggestion": "请核对并修正租期的开始和结束日期",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "date_conflict",
           "description": "签署日期(2025-08-01)晚于租期开始日期(2025-07-15)",
           "risk_level": "medium",
-          "suggestion": "请确认签署日期是否正确，如为补签请注明"
+          "suggestion": "请确认签署日期是否正确，如为补签请注明",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "abnormal_rent",
           "description": "租金金额缺失或为0",
           "risk_level": "high",
-          "suggestion": "请填写正确的月租金金额"
+          "suggestion": "请填写正确的月租金金额",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "承租方身份证号格式错误: 510104199006253472",
           "risk_level": "high",
-          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码"
+          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "出租方身份证号格式错误: 110106198203128765",
-          "risk_level": "medium",
-          "suggestion": "请核实出租方身份证号并重新填写"
+          "risk_level": "high",
+          "suggestion": "请核实出租方身份证号并重新填写",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         }
-      ]
+      ],
+      "review_notes": "",
+      "first_scan_time": "2026-06-11T19:33:03.567296",
+      "last_scan_time": "2026-06-11T19:33:03.973228"
     },
     {
       "contract_id": "合同005_即将到期_高风险期",
       "file_path": "contracts\\合同005_即将到期_高风险期.txt",
+      "file_mtime": 1781175463.93441,
+      "scan_batch_id": "batch_20260611_193303",
       "room_number": "B-1203",
       "tenant_name": "黄丽",
       "tenant_id_number": "330106199309185678",
@@ -203,16 +273,68 @@
           "issue_type": "invalid_id_number",
           "description": "承租方身份证号格式错误: 330106199309185678",
           "risk_level": "high",
-          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码"
+          "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         },
         {
           "issue_type": "invalid_id_number",
           "description": "出租方身份证号格式错误: 110108197711054321",
-          "risk_level": "medium",
-          "suggestion": "请核实出租方身份证号并重新填写"
+          "risk_level": "high",
+          "suggestion": "请核实出租方身份证号并重新填写",
+          "status": "pending",
+          "review_note": "",
+          "review_time": null
         }
-      ]
+      ],
+      "review_notes": "",
+      "first_scan_time": "2026-06-11T19:33:03.567296",
+      "last_scan_time": "2026-06-11T19:33:03.973228"
     }
   ],
-  "last_scan_time": "2026-06-11T19:05:17.331353"
+  "batches": [
+    {
+      "batch_id": "batch_20260611_193303",
+      "scan_time": "2026-06-11T19:33:03.973228",
+      "folder": "contracts",
+      "total_count": 5,
+      "new_count": 0,
+      "updated_count": 0,
+      "unchanged_count": 5,
+      "rule_name": "default"
+    },
+    {
+      "batch_id": "batch_20260611_193303",
+      "scan_time": "2026-06-11T19:33:03.567296",
+      "folder": "contracts",
+      "total_count": 5,
+      "new_count": 5,
+      "updated_count": 0,
+      "unchanged_count": 0,
+      "rule_name": "default"
+    }
+  ],
+  "last_scan_time": "2026-06-11T19:33:03.973228",
+  "current_rule": {
+    "rule_name": "default",
+    "rent_deviation_threshold": 0.5,
+    "deposit_multiples": [
+      0.5,
+      1.0,
+      2.0,
+      3.0
+    ],
+    "deposit_tolerance": 0.1,
+    "expiring_days_default": 30,
+    "high_risk_issue_types": [
+      "missing_signature",
+      "date_conflict",
+      "lease_overlap",
+      "abnormal_rent",
+      "invalid_id_number"
+    ],
+    "require_agent_signature": true,
+    "min_rent_amount": 100.0
+  }
 }

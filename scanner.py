@@ -313,7 +313,8 @@ def scan_contract_file(file_path: str) -> Contract:
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         text = f.read()
 
-    contract = Contract(file_path=file_path)
+    file_mtime = os.path.getmtime(file_path)
+    contract = Contract(file_path=file_path, file_mtime=file_mtime)
     contract.contract_id = os.path.splitext(os.path.basename(file_path))[0]
 
     contract.room_number = extract_room_number(text)
@@ -329,20 +330,95 @@ def scan_contract_file(file_path: str) -> Contract:
     return contract
 
 
-def scan_folder(folder_path: str) -> List[Contract]:
+def collect_files(folder_path: str, recursive: bool = False) -> List[Path]:
     folder = Path(folder_path)
     if not folder.exists():
         raise FileNotFoundError(f"文件夹不存在: {folder_path}")
 
-    contracts: List[Contract] = []
     supported_extensions = {".txt", ".md"}
+    files: List[Path] = []
 
-    for file_path in sorted(folder.iterdir()):
-        if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
-            try:
-                contract = scan_contract_file(str(file_path))
-                contracts.append(contract)
-            except Exception as e:
-                print(f"扫描文件 {file_path} 时出错: {e}")
+    if recursive:
+        for root, _, filenames in os.walk(folder):
+            for fname in filenames:
+                fpath = Path(root) / fname
+                if fpath.suffix.lower() in supported_extensions:
+                    files.append(fpath)
+    else:
+        for fpath in folder.iterdir():
+            if fpath.is_file() and fpath.suffix.lower() in supported_extensions:
+                files.append(fpath)
 
-    return contracts
+    return sorted(files)
+
+
+class ScanResult:
+    def __init__(self):
+        self.new_contracts: List[Contract] = []
+        self.updated_contracts: List[Contract] = []
+        self.unchanged_contracts: List[Contract] = []
+        self.errors: List[tuple] = []
+
+    @property
+    def all_contracts(self) -> List[Contract]:
+        return self.new_contracts + self.updated_contracts + self.unchanged_contracts
+
+    @property
+    def total_count(self) -> int:
+        return len(self.all_contracts)
+
+    @property
+    def new_count(self) -> int:
+        return len(self.new_contracts)
+
+    @property
+    def updated_count(self) -> int:
+        return len(self.updated_contracts)
+
+    @property
+    def unchanged_count(self) -> int:
+        return len(self.unchanged_contracts)
+
+
+def scan_folder(
+    folder_path: str,
+    recursive: bool = False,
+    existing_contracts: Optional[List[Contract]] = None,
+    incremental: bool = True,
+) -> ScanResult:
+    files = collect_files(folder_path, recursive)
+    result = ScanResult()
+
+    existing_map = {}
+    if existing_contracts and incremental:
+        for c in existing_contracts:
+            existing_map[c.file_path] = c
+
+    for file_path in files:
+        try:
+            fpath_str = str(file_path)
+            fstat = file_path.stat()
+
+            if incremental and fpath_str in existing_map:
+                old_contract = existing_map[fpath_str]
+                if abs(fstat.st_mtime - old_contract.file_mtime) < 0.001:
+                    result.unchanged_contracts.append(old_contract)
+                    continue
+
+            new_contract = scan_contract_file(fpath_str)
+
+            if fpath_str in existing_map:
+                old_contract = existing_map[fpath_str]
+                new_contract.issues = old_contract.issues
+                new_contract.review_notes = old_contract.review_notes
+                new_contract.first_scan_time = old_contract.first_scan_time
+                new_contract.scan_batch_id = old_contract.scan_batch_id
+                result.updated_contracts.append(new_contract)
+            else:
+                result.new_contracts.append(new_contract)
+
+        except Exception as e:
+            result.errors.append((str(file_path), str(e)))
+
+    return result
+
