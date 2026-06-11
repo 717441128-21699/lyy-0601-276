@@ -123,6 +123,7 @@ def add_batch(
         unchanged_count=scan_result.unchanged_count,
         rule_name=rule.rule_name,
         contract_file_paths=[c.file_path for c in scan_result.all_contracts],
+        contract_snapshots=[c.model_copy(deep=True) for c in scan_result.all_contracts],
     )
 
     db.batches.insert(0, batch)
@@ -144,6 +145,8 @@ def get_contracts_by_batch(batch_id: str, base_path: Optional[str] = None) -> Li
     batch = db.get_batch_by_id(batch_id)
     if not batch:
         return []
+    if batch.contract_snapshots:
+        return [c.model_copy(deep=True) for c in batch.contract_snapshots]
     path_set = set(batch.contract_file_paths)
     return [c for c in db.contracts if c.file_path in path_set]
 

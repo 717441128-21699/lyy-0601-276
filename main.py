@@ -20,6 +20,7 @@ from exporter import (
     export_expiring_list,
     export_pending_list,
     export_review_progress,
+    export_review_progress_detail,
     filter_contracts,
     follow_up_action_label,
     get_contract_summary,
@@ -28,10 +29,12 @@ from exporter import (
     issue_status_label,
     issue_type_label,
     payment_method_label,
+    priority_label,
+    change_risk_label,
     risk_level_label,
     sort_contracts,
 )
-from models import Contract, FollowUpAction, IssueType, RiskLevel, IssueStatus, RuleConfig
+from models import Contract, FollowUpAction, IssueType, RiskLevel, IssueStatus, RuleConfig, PriorityLevel, ChangeRiskLevel
 from scanner import scan_folder
 from storage import (
     add_batch,
@@ -136,9 +139,27 @@ def display_contract_card(c: Contract, show_issues: bool = True, show_status: bo
         elements.append(Text("🔄 字段变更历史:", style="bold magenta"))
         for fc in c.field_changes[-5:]:
             ct = fc.change_time[:16].replace("T", " ")
-            elements.append(Text(f"   [{ct}] {fc.field_name}: {fc.old_value} → {fc.new_value}", style="magenta dim"))
+            line = Text(f"   [{ct}] {fc.field_name}: {fc.old_value} → {fc.new_value}", style="magenta dim")
+            if fc.change_risk and fc.change_risk != ChangeRiskLevel.NONE:
+                r_color = {
+                    ChangeRiskLevel.LOW: "blue",
+                    ChangeRiskLevel.MEDIUM: "yellow",
+                    ChangeRiskLevel.HIGH: "red",
+                }.get(fc.change_risk, "dim")
+                line.append(f" ⚠️[{change_risk_label(fc.change_risk)}风险]", style=f"bold {r_color}")
+                if fc.risk_note:
+                    line.append(f" {fc.risk_note}", style=r_color)
+            elements.append(line)
         if len(c.field_changes) > 5:
             elements.append(Text(f"   ... 还有 {len(c.field_changes)-5} 条变更", style="dim"))
+
+    if c.high_risk_changes:
+        elements.append(Text(""))
+        hr_line = Text("🚨 高风险变更: ", style="bold red")
+        hr_line.append(f"{len(c.high_risk_changes)} 条", style="bold red")
+        elements.append(hr_line)
+        for fc in c.high_risk_changes[-3:]:
+            elements.append(Text(f"   • {fc.field_name}: {fc.old_value} → {fc.new_value} - {fc.risk_note}", style="red dim"))
 
     latest = c.latest_follow_up
     if latest:
@@ -227,8 +248,9 @@ def scan(ctx, folder, recursive, incremental, auto_check, verbose, rule_file):
 @click.option("--sort-by", type=click.Choice(["risk", "end_date", "room", "rent"]), default="risk", help="排序方式")
 @click.option("--rule-file", type=click.Path(), help="使用指定的规则配置文件")
 @click.option("--show-rule", is_flag=True, help="显示当前使用的规则配置")
+@click.option("--change-risk", is_flag=True, help="只显示有高风险变更的合同")
 @click.pass_context
-def check_cmd(ctx, high_risk_only, sort_by, rule_file, show_rule):
+def check_cmd(ctx, high_risk_only, sort_by, rule_file, show_rule, change_risk):
     data_dir = ctx.obj["data_dir"]
     contracts = load_contracts(data_dir)
 
@@ -261,15 +283,26 @@ def check_cmd(ctx, high_risk_only, sort_by, rule_file, show_rule):
             console.print("[bold green]🎉 没有高风险合同![/bold green]")
             return
 
+    if change_risk:
+        contracts = [c for c in contracts if c.high_risk_changes]
+        if not contracts:
+            console.print("[bold green]🎉 没有高风险变更的合同![/bold green]")
+            return
+
     contracts = sort_contracts(contracts, sort_by)
 
     high = sum(1 for c in contracts if c.risk_level == RiskLevel.HIGH)
     medium = sum(1 for c in contracts if c.risk_level == RiskLevel.MEDIUM)
     low = sum(1 for c in contracts if c.risk_level == RiskLevel.LOW)
-    console.print(f"\n[bold]共 {len(contracts)} 份合同: [/bold]"
-                  f"[red]高风险 {high}[/red], "
-                  f"[yellow]中风险 {medium}[/yellow], "
-                  f"[green]低/无 {low}[/green]\n")
+    hr_change = sum(1 for c in contracts if c.high_risk_changes)
+    stats = [
+        f"[red]高风险 {high}[/red]",
+        f"[yellow]中风险 {medium}[/yellow]",
+        f"[green]低/无 {low}[/green]",
+    ]
+    if hr_change > 0:
+        stats.append(f"[bold red]高风险变更 {hr_change}[/bold red]")
+    console.print(f"\n[bold]共 {len(contracts)} 份合同: [/bold]{', '.join(stats)}\n")
 
     for c in contracts:
         display_contract_card(c)
@@ -289,9 +322,18 @@ def check_cmd(ctx, high_risk_only, sort_by, rule_file, show_rule):
 @click.option("--end-date", help="租期结束日期(YYYY-MM-DD)止")
 @click.option("--sort-by", type=click.Choice(["risk", "end_date", "room", "rent"]), default="end_date", help="排序方式")
 @click.option("--batches", is_flag=True, help="列出所有扫描批次")
+@click.option("--overdue", "follow_overdue", is_flag=True, help="只显示有逾期跟进任务的合同")
+@click.option("--due-today", "follow_due_today", is_flag=True, help="只显示今日到期跟进的合同")
+@click.option("--follow-operator", help="按跟进负责人筛选")
+@click.option("--follow-priority", type=click.Choice(["low", "medium", "high", "urgent"]),
+              help="按跟进优先级筛选")
+@click.option("--follow-summary", is_flag=True, help="按负责人汇总展示跟进任务")
+@click.option("--change-risk", is_flag=True, help="只显示有高风险变更的合同")
 @click.pass_context
 def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
-             batch_id, start_date, end_date, sort_by, batches):
+             batch_id, start_date, end_date, sort_by, batches,
+             follow_overdue, follow_due_today, follow_operator,
+             follow_priority, follow_summary, change_risk):
     data_dir = ctx.obj["data_dir"]
 
     if batches:
@@ -335,6 +377,7 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
     contracts = check_all_contracts(contracts, rule)
 
     issue_type_val = IssueType(issue_type) if issue_type else None
+    follow_priority_val = PriorityLevel(follow_priority) if follow_priority else None
 
     start_d = date.fromisoformat(start_date) if start_date else None
     end_d = date.fromisoformat(end_date) if end_date else None
@@ -346,12 +389,104 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
         agent=agent,
         issue_type=issue_type_val,
         high_risk_only=high_risk_only,
+        batch_id=batch_id,
         start_date=start_d,
         end_date=end_d,
+        follow_operator=follow_operator,
+        follow_overdue_only=follow_overdue,
+        follow_due_today_only=follow_due_today,
+        follow_priority=follow_priority_val,
+        change_risk_only=change_risk,
     )
 
     if not contracts:
         console.print("[yellow]⚠️  没有符合条件的合同[/yellow]")
+        return
+
+    if follow_summary:
+        from collections import defaultdict
+        summary = defaultdict(list)
+        for c in contracts:
+            all_fu = c.pending_follow_ups
+            for fu in all_fu:
+                op = fu.operator or "未指定负责人"
+                summary[op].append((c, fu))
+
+        title_parts = ["跟进任务汇总"]
+        if follow_overdue:
+            title_parts.append("【逾期】")
+        if follow_due_today:
+            title_parts.append("【今日到期】")
+        if follow_operator:
+            title_parts.append(f"【负责人:{follow_operator}】")
+
+        table = Table(show_header=True, header_style="bold blue",
+                      title=f"{''.join(title_parts)} (共 {sum(len(v) for v in summary.values())} 项任务)")
+        table.add_column("负责人", style="bold")
+        table.add_column("任务数", justify="right")
+        table.add_column("紧急", justify="right", style="bold red")
+        table.add_column("高优", justify="right", style="red")
+        table.add_column("中优", justify="right", style="yellow")
+        table.add_column("低优", justify="right", style="green")
+        table.add_column("逾期", justify="right", style="bold red")
+        table.add_column("今日到期", justify="right", style="bold yellow")
+
+        for op in sorted(summary.keys()):
+            items = summary[op]
+            urgent = sum(1 for _, fu in items if fu.priority == PriorityLevel.URGENT)
+            high = sum(1 for _, fu in items if fu.priority == PriorityLevel.HIGH)
+            medium = sum(1 for _, fu in items if fu.priority == PriorityLevel.MEDIUM)
+            low = sum(1 for _, fu in items if fu.priority == PriorityLevel.LOW)
+            overdue = sum(1 for _, fu in items if fu.is_overdue)
+            due_today = sum(1 for _, fu in items if fu.is_due_today)
+
+            table.add_row(
+                op,
+                str(len(items)),
+                str(urgent) if urgent > 0 else "-",
+                str(high) if high > 0 else "-",
+                str(medium) if medium > 0 else "-",
+                str(low) if low > 0 else "-",
+                str(overdue) if overdue > 0 else "-",
+                str(due_today) if due_today > 0 else "-",
+            )
+        console.print(table)
+
+        for op in sorted(summary.keys()):
+            items = sorted(summary[op], key=lambda x: (
+                0 if x[1].is_overdue else 1,
+                0 if x[1].is_due_today else 1,
+                {"urgent": 0, "high": 1, "medium": 2, "low": 3}.get(x[1].priority.value, 4),
+            ))
+            console.print(f"\n[bold]📋 {op} - 待处理跟进任务 ({len(items)} 项)[/bold]")
+            detail_table = Table(show_header=True, header_style="bold", show_lines=False)
+            detail_table.add_column("优先级", width=8)
+            detail_table.add_column("状态", width=10)
+            detail_table.add_column("预计完成")
+            detail_table.add_column("房号")
+            detail_table.add_column("动作")
+            detail_table.add_column("内容")
+            detail_table.add_column("下次跟进")
+
+            for c, fu in items:
+                pri_color = {"urgent": "bold red", "high": "red", "medium": "yellow", "low": "green"}.get(fu.priority.value, "dim")
+                status = ""
+                if fu.is_overdue:
+                    status = Text("⚠️ 逾期", style="bold red")
+                elif fu.is_due_today:
+                    status = Text("📅 今日", style="bold yellow")
+
+                detail_table.add_row(
+                    Text(priority_label(fu.priority), style=pri_color),
+                    status,
+                    fu.expected_date[:10] if fu.expected_date else "-",
+                    c.room_number or "-",
+                    follow_up_action_label(fu.action),
+                    fu.content,
+                    fu.next_follow_date[:10] if fu.next_follow_date else "-",
+                )
+            console.print(detail_table)
+
         return
 
     contracts = sort_contracts(contracts, sort_by)
@@ -407,9 +542,10 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
 @click.option("--end-date", help="租期结束日期(YYYY-MM-DD)止")
 @click.option("--format", "fmt", type=click.Choice(["xlsx", "csv"]), default="xlsx", help="导出格式")
 @click.option("--split-by-agent", is_flag=True, help="export all时按经纪人拆分额外输出")
+@click.option("--detail", is_flag=True, help="export progress时额外导出明细行(按问题展开)")
 @click.pass_context
 def export_cmd(ctx, report_type, output, days, high_risk_only, room, agent,
-               batch_id, start_date, end_date, fmt, split_by_agent):
+               batch_id, start_date, end_date, fmt, split_by_agent, detail):
     data_dir = ctx.obj["data_dir"]
     contracts = load_contracts(data_dir)
 
@@ -503,6 +639,14 @@ def export_cmd(ctx, report_type, output, days, high_risk_only, room, agent,
         export_review_progress(contracts, output)
         console.print(f"[bold green]✅ 处理进度表已导出到: {output}[/bold green]")
         console.print(f"   共 {len(contracts)} 份合同")
+        if detail:
+            from pathlib import Path
+            detail_path = str(Path(output).with_name(f"跟进明细表{ext}"))
+            export_review_progress_detail(contracts, detail_path)
+            console.print(f"[bold green]✅ 跟进明细表已导出到: {detail_path}[/bold green]")
+            from exporter import get_review_progress_detail
+            items = get_review_progress_detail(contracts)
+            console.print(f"   共 {len(items)} 条问题明细")
 
 
 @cli.command("review", help="逐份审核合同，标记问题状态")
@@ -633,10 +777,16 @@ def review(ctx, high_risk_only, sort_by, room, agent, export_progress):
 @click.option("--content", help="跟进内容描述")
 @click.option("--operator", help="跟进负责人")
 @click.option("--issue-idx", type=int, default=-1, help="指定问题编号(从1开始)，不指定则记录到合同级别")
+@click.option("--priority", type=click.Choice(["low", "medium", "high", "urgent"]),
+              default="medium", help="优先级 (low/medium/high/urgent)")
+@click.option("--expected-date", help="预计完成日期 YYYY-MM-DD")
+@click.option("--next-follow-date", help="下次跟进日期 YYYY-MM-DD")
+@click.option("--complete", is_flag=True, help="标记该跟进已完成")
 @click.option("--export", "export_path", type=click.Path(), help="完成后导出处理进度表")
 @click.pass_context
 def follow_up_cmd(ctx, room, agent, high_risk_only, follow_all, action,
-                  content, operator, issue_idx, export_path):
+                  content, operator, issue_idx, priority, expected_date,
+                  next_follow_date, complete, export_path):
     data_dir = ctx.obj["data_dir"]
     all_contracts = load_contracts(data_dir)
 
@@ -663,16 +813,27 @@ def follow_up_cmd(ctx, room, agent, high_risk_only, follow_all, action,
             console.print("[red]❌ 批量模式必须指定 --action 和 --content[/red]")
             return
         action_val = FollowUpAction(action)
+        priority_val = PriorityLevel(priority)
         count = 0
         for c in filtered:
             issue_index = issue_idx - 1 if issue_idx > 0 else -1
-            c.add_follow_up(action_val, content, operator=operator, issue_index=issue_index)
+            c.add_follow_up(action_val, content, operator=operator, issue_index=issue_index,
+                            expected_date=expected_date, next_follow_date=next_follow_date,
+                            priority=priority_val, completed=complete)
             count += 1
         update_contracts(filtered, data_dir)
         console.print(f"[bold green]✅ 批量跟进完成[/bold green]")
         console.print(f"   共登记 {count} 条跟进: {follow_up_action_label(action_val)} - {content}")
         if operator:
             console.print(f"   负责人: {operator}")
+        if priority != "medium":
+            console.print(f"   优先级: {priority_label(priority_val)}")
+        if expected_date:
+            console.print(f"   预计完成: {expected_date}")
+        if next_follow_date:
+            console.print(f"   下次跟进: {next_follow_date}")
+        if complete:
+            console.print(f"   [green]已标记完成[/green]")
 
     else:
         console.print(f"📋 共 {len(filtered)} 份合同可选，开始交互跟进\n")
@@ -718,7 +879,12 @@ def follow_up_cmd(ctx, room, agent, high_risk_only, follow_all, action,
                     scope = f"问题[{i+1}]" if i >= 0 else "合同"
                     ct = fu.follow_time[:16].replace("T", " ")
                     op = f" ({fu.operator})" if fu.operator else ""
-                    console.print(f"   [{ct}] {scope} {follow_up_action_label(fu.action)}: {fu.content}{op}")
+                    pri = f" [{priority_label(fu.priority)}]" if fu.priority != PriorityLevel.MEDIUM else ""
+                    exp = f" ⏰{fu.expected_date[:10]}" if fu.expected_date else ""
+                    done = " ✅" if fu.completed else ""
+                    overdue = " ⚠️逾期" if fu.is_overdue else ""
+                    due_today = " 📅今日到期" if fu.is_due_today else ""
+                    console.print(f"   [{ct}] {scope} {follow_up_action_label(fu.action)}: {fu.content}{op}{pri}{exp}{done}{overdue}{due_today}")
                 console.print("")
                 continue
             elif choice == "a":
@@ -767,9 +933,36 @@ def follow_up_cmd(ctx, room, agent, high_risk_only, follow_all, action,
                 else:
                     fu_operator = operator
 
-                c.add_follow_up(action_val, fu_content, operator=fu_operator, issue_index=issue_index)
+                if priority == "medium":
+                    p_choice = Prompt.ask(
+                        "优先级? (1=低 2=中 3=高 4=紧急)",
+                        choices=["1", "2", "3", "4"],
+                        default="2",
+                    )
+                    p_map = {"1": PriorityLevel.LOW, "2": PriorityLevel.MEDIUM,
+                             "3": PriorityLevel.HIGH, "4": PriorityLevel.URGENT}
+                    fu_priority = p_map[p_choice]
+                else:
+                    fu_priority = PriorityLevel(priority)
+
+                if not expected_date:
+                    fu_expected = Prompt.ask("预计完成日期 YYYY-MM-DD (可留空)", default="")
+                else:
+                    fu_expected = expected_date
+
+                if not next_follow_date:
+                    fu_next = Prompt.ask("下次跟进日期 YYYY-MM-DD (可留空)", default="")
+                else:
+                    fu_next = next_follow_date
+
+                fu_completed = complete or Confirm.ask("标记为已完成?", default=False)
+
+                c.add_follow_up(action_val, fu_content, operator=fu_operator, issue_index=issue_index,
+                                expected_date=fu_expected or None, next_follow_date=fu_next or None,
+                                priority=fu_priority, completed=fu_completed)
                 modified = True
-                console.print(f"[green]✅ 已登记跟进: {follow_up_action_label(action_val)} - {fu_content}[/green]")
+                status = "[green]✓已完成[/green]" if fu_completed else ""
+                console.print(f"[green]✅ 已登记跟进: {follow_up_action_label(action_val)} - {fu_content}[/green] {status}")
 
         if modified:
             if Confirm.ask("有未保存的更改，是否保存?"):

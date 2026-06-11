@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-from models import Contract, RiskLevel, IssueType, IssueStatus, FollowUpAction
+from models import Contract, RiskLevel, IssueType, IssueStatus, FollowUpAction, PriorityLevel, ChangeRiskLevel
 
 
 def format_date(d: Optional[date]) -> str:
@@ -60,6 +60,16 @@ def follow_up_action_label(action) -> str:
     return labels.get(getattr(action, "value", action), str(action))
 
 
+def priority_label(priority) -> str:
+    labels = {"low": "低", "medium": "中", "high": "高", "urgent": "紧急"}
+    return labels.get(getattr(priority, "value", priority), "中")
+
+
+def change_risk_label(risk) -> str:
+    labels = {"none": "无", "low": "低", "medium": "中", "high": "高"}
+    return labels.get(getattr(risk, "value", risk), "无")
+
+
 def filter_contracts(
     contracts: List[Contract],
     room: Optional[str] = None,
@@ -71,6 +81,11 @@ def filter_contracts(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     status: Optional[IssueStatus] = None,
+    follow_operator: Optional[str] = None,
+    follow_overdue_only: bool = False,
+    follow_due_today_only: bool = False,
+    follow_priority: Optional[PriorityLevel] = None,
+    change_risk_only: bool = False,
 ) -> List[Contract]:
     result = contracts
 
@@ -96,6 +111,22 @@ def filter_contracts(
         result = [c for c in result if c.end_date and c.end_date <= end_date]
     if status:
         result = [c for c in result if any(i.status == status for i in c.issues)]
+    if follow_operator:
+        result = [c for c in result if any(
+            (not f.completed) and follow_operator.lower() in (f.operator or "").lower()
+            for f in (c.follow_ups + [fu for i in c.issues for fu in i.follow_ups])
+        )]
+    if follow_overdue_only:
+        result = [c for c in result if c.overdue_follow_ups]
+    if follow_due_today_only:
+        result = [c for c in result if c.due_today_follow_ups]
+    if follow_priority:
+        result = [c for c in result if any(
+            (not f.completed) and f.priority == follow_priority
+            for f in (c.follow_ups + [fu for i in c.issues for fu in i.follow_ups])
+        )]
+    if change_risk_only:
+        result = [c for c in result if c.high_risk_changes]
 
     return result
 
@@ -244,6 +275,76 @@ def get_review_progress(contracts: List[Contract]) -> List[dict]:
     return items
 
 
+def get_review_progress_detail(contracts: List[Contract]) -> List[dict]:
+    items = []
+    for c in contracts:
+        for issue_idx, issue in enumerate(c.issues):
+            pending = 1 if issue.status == IssueStatus.PENDING else 0
+            resolved = 1 if issue.status in (IssueStatus.RESOLVED, IssueStatus.CONFIRMED) else 0
+            ignored = 1 if issue.status == IssueStatus.IGNORED else 0
+
+            latest_fu = issue.latest_follow_up
+            if latest_fu:
+                latest_action = follow_up_action_label(latest_fu.action)
+                latest_content = latest_fu.content
+                latest_operator = latest_fu.operator
+                latest_time = latest_fu.follow_time[:16].replace("T", " ")
+                priority = priority_label(latest_fu.priority)
+                expected_date = latest_fu.expected_date[:10] if latest_fu.expected_date else ""
+                next_follow_date = latest_fu.next_follow_date[:10] if latest_fu.next_follow_date else ""
+                is_overdue = "是" if latest_fu.is_overdue else "否"
+                is_due_today = "是" if latest_fu.is_due_today else ""
+            else:
+                latest_action = ""
+                latest_content = ""
+                latest_operator = ""
+                latest_time = ""
+                priority = ""
+                expected_date = ""
+                next_follow_date = ""
+                is_overdue = ""
+                is_due_today = ""
+
+            items.append({
+                "合同文件": Path(c.file_path).name,
+                "房号": c.room_number,
+                "租客": c.tenant_name,
+                "经纪人": c.agent_name or "未指定",
+                "问题编号": issue_idx + 1,
+                "问题类型": issue_type_label(issue.issue_type),
+                "问题描述": issue.description,
+                "风险等级": risk_level_label(issue.risk_level),
+                "问题状态": issue_status_label(issue.status),
+                "审核备注": issue.review_note,
+                "最近跟进动作": latest_action,
+                "最近跟进内容": latest_content,
+                "跟进负责人": latest_operator,
+                "最近跟进时间": latest_time,
+                "优先级": priority,
+                "预计完成日期": expected_date,
+                "下次跟进日期": next_follow_date,
+                "是否逾期": is_overdue,
+                "是否今日到期": is_due_today,
+            })
+    priority_order = {"紧急": 0, "高": 1, "中": 2, "低": 3, "": 4}
+    items.sort(key=lambda x: (priority_order.get(x["优先级"], 4),
+                             0 if x["是否逾期"] == "是" else 1,
+                             0 if x["是否今日到期"] == "是" else 1,
+                             x["经纪人"]))
+    return items
+
+
+def export_review_progress_detail(contracts: List[Contract], output_path: str) -> str:
+    items = get_review_progress_detail(contracts)
+    if output_path.endswith(".xlsx"):
+        write_excel(items, output_path, "跟进明细表")
+    elif output_path.endswith(".csv"):
+        write_csv(items, output_path)
+    else:
+        write_excel(items, output_path, "跟进明细表")
+    return output_path
+
+
 def write_csv(rows: List[dict], output_path: str) -> None:
     if not rows:
         with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
@@ -369,6 +470,8 @@ def export_by_agent(contracts: List[Contract], output_dir: str,
         if "progress" in report_types:
             path = str(agent_dir / f"处理进度表_{safe_agent}_{timestamp}{ext}")
             outputs.append(export_review_progress(agent_contracts, path))
+            detail_path = str(agent_dir / f"跟进明细表_{safe_agent}_{timestamp}{ext}")
+            outputs.append(export_review_progress_detail(agent_contracts, detail_path))
 
     return outputs
 
@@ -384,6 +487,7 @@ def export_all(contracts: List[Contract], output_dir: str, days: int = 30,
     outputs.append(export_expiring_list(contracts, str(Path(output_dir) / f"到期清单_{days}天_{timestamp}{ext}"), days))
     outputs.append(export_contract_summary(contracts, str(Path(output_dir) / f"合同摘要_{timestamp}{ext}")))
     outputs.append(export_review_progress(contracts, str(Path(output_dir) / f"处理进度表_{timestamp}{ext}")))
+    outputs.append(export_review_progress_detail(contracts, str(Path(output_dir) / f"跟进明细表_{timestamp}{ext}")))
 
     if split_by_agent:
         agent_dir = Path(output_dir) / "按经纪人拆分"

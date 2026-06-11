@@ -28,6 +28,20 @@ class IssueStatus(str, Enum):
     IGNORED = "ignored"
 
 
+class PriorityLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
+class ChangeRiskLevel(str, Enum):
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class FollowUpAction(str, Enum):
     SIGN_SUPPLEMENT = "sign_supplement"
     ID_SUPPLEMENT = "id_supplement"
@@ -55,6 +69,31 @@ class FollowUpRecord(BaseModel):
     content: str = ""
     operator: str = ""
     follow_time: str = ""
+    expected_date: Optional[str] = None
+    next_follow_date: Optional[str] = None
+    priority: PriorityLevel = PriorityLevel.MEDIUM
+    completed: bool = False
+    completed_date: Optional[str] = None
+
+    @property
+    def is_overdue(self) -> bool:
+        if not self.expected_date or self.completed:
+            return False
+        try:
+            exp = date.fromisoformat(self.expected_date[:10])
+            return date.today() > exp
+        except Exception:
+            return False
+
+    @property
+    def is_due_today(self) -> bool:
+        if not self.expected_date or self.completed:
+            return False
+        try:
+            exp = date.fromisoformat(self.expected_date[:10])
+            return date.today() == exp
+        except Exception:
+            return False
 
 
 class FieldChange(BaseModel):
@@ -62,6 +101,8 @@ class FieldChange(BaseModel):
     old_value: str = ""
     new_value: str = ""
     change_time: str = ""
+    change_risk: ChangeRiskLevel = ChangeRiskLevel.NONE
+    risk_note: str = ""
 
 
 class Issue(BaseModel):
@@ -79,7 +120,10 @@ class Issue(BaseModel):
         self.review_note = note
         self.review_time = datetime.now().isoformat()
 
-    def add_follow_up(self, action: FollowUpAction, content: str, operator: str = "") -> FollowUpRecord:
+    def add_follow_up(self, action: FollowUpAction, content: str, operator: str = "",
+                      expected_date: Optional[str] = None, next_follow_date: Optional[str] = None,
+                      priority: PriorityLevel = PriorityLevel.MEDIUM,
+                      completed: bool = False, completed_date: Optional[str] = None) -> FollowUpRecord:
         record = FollowUpRecord(
             follow_id=datetime.now().strftime("fu_%Y%m%d_%H%M%S_%f")[:-3],
             issue_index=-1,
@@ -87,6 +131,11 @@ class Issue(BaseModel):
             content=content,
             operator=operator,
             follow_time=datetime.now().isoformat(),
+            expected_date=expected_date,
+            next_follow_date=next_follow_date,
+            priority=priority,
+            completed=completed,
+            completed_date=completed_date,
         )
         self.follow_ups.append(record)
         return record
@@ -130,6 +179,7 @@ class ScanBatch(BaseModel):
     unchanged_count: int = 0
     rule_name: str = "default"
     contract_file_paths: List[str] = Field(default_factory=list)
+    contract_snapshots: List[Contract] = Field(default_factory=list)
 
 
 class Contract(BaseModel):
@@ -191,7 +241,10 @@ class Contract(BaseModel):
         return [i for i in self.issues if i.issue_type == issue_type]
 
     def add_follow_up(self, action: FollowUpAction, content: str,
-                      operator: str = "", issue_index: int = -1) -> FollowUpRecord:
+                      operator: str = "", issue_index: int = -1,
+                      expected_date: Optional[str] = None, next_follow_date: Optional[str] = None,
+                      priority: PriorityLevel = PriorityLevel.MEDIUM,
+                      completed: bool = False, completed_date: Optional[str] = None) -> FollowUpRecord:
         record = FollowUpRecord(
             follow_id=datetime.now().strftime("fu_%Y%m%d_%H%M%S_%f")[:-3],
             issue_index=issue_index,
@@ -199,6 +252,11 @@ class Contract(BaseModel):
             content=content,
             operator=operator,
             follow_time=datetime.now().isoformat(),
+            expected_date=expected_date,
+            next_follow_date=next_follow_date,
+            priority=priority,
+            completed=completed,
+            completed_date=completed_date,
         )
         if issue_index >= 0 and issue_index < len(self.issues):
             self.issues[issue_index].follow_ups.append(record)
@@ -216,7 +274,29 @@ class Contract(BaseModel):
             return None
         return sorted(all_follows, key=lambda x: x.follow_time, reverse=True)[0]
 
-    def add_field_change(self, field_name: str, old_val: str, new_val: str) -> None:
+    @property
+    def pending_follow_ups(self) -> List[FollowUpRecord]:
+        all_follows: List[FollowUpRecord] = []
+        all_follows.extend(self.follow_ups)
+        for issue in self.issues:
+            all_follows.extend(issue.follow_ups)
+        return [f for f in all_follows if not f.completed]
+
+    @property
+    def overdue_follow_ups(self) -> List[FollowUpRecord]:
+        return [f for f in self.pending_follow_ups if f.is_overdue]
+
+    @property
+    def due_today_follow_ups(self) -> List[FollowUpRecord]:
+        return [f for f in self.pending_follow_ups if f.is_due_today]
+
+    @property
+    def high_risk_changes(self) -> List[FieldChange]:
+        return [fc for fc in self.field_changes if fc.change_risk in (ChangeRiskLevel.HIGH, ChangeRiskLevel.MEDIUM)]
+
+    def add_field_change(self, field_name: str, old_val: str, new_val: str,
+                         change_risk: ChangeRiskLevel = ChangeRiskLevel.NONE,
+                         risk_note: str = "") -> None:
         if str(old_val) == str(new_val):
             return
         self.field_changes.append(FieldChange(
@@ -224,6 +304,8 @@ class Contract(BaseModel):
             old_value=str(old_val),
             new_value=str(new_val),
             change_time=datetime.now().isoformat(),
+            change_risk=change_risk,
+            risk_note=risk_note,
         ))
 
 

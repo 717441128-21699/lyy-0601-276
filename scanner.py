@@ -6,7 +6,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from models import Contract, PaymentMethod
+from models import Contract, PaymentMethod, ChangeRiskLevel
 
 
 def parse_date(date_str: str) -> Optional[date]:
@@ -380,6 +380,64 @@ class ScanResult:
         return len(self.unchanged_contracts)
 
 
+def assess_change_risk(field_name: str, old_val: str, new_val: str) -> Tuple[ChangeRiskLevel, str]:
+    risk = ChangeRiskLevel.NONE
+    note = ""
+
+    if field_name == "月租金":
+        try:
+            old_f = float(old_val)
+            new_f = float(new_val)
+            if old_f > 0:
+                change_pct = abs(new_f - old_f) / old_f
+                if change_pct >= 0.3:
+                    risk = ChangeRiskLevel.HIGH
+                    note = f"租金变动{change_pct*100:.0f}%，超过30%阈值"
+                elif change_pct >= 0.1:
+                    risk = ChangeRiskLevel.MEDIUM
+                    note = f"租金变动{change_pct*100:.0f}%"
+        except Exception:
+            pass
+    elif field_name == "押金":
+        try:
+            old_f = float(old_val)
+            new_f = float(new_val)
+            if old_f > 0:
+                change_pct = abs(new_f - old_f) / old_f
+                if change_pct >= 0.5:
+                    risk = ChangeRiskLevel.HIGH
+                    note = f"押金变动{change_pct*100:.0f}%，超过50%阈值"
+                elif change_pct >= 0.2:
+                    risk = ChangeRiskLevel.MEDIUM
+                    note = f"押金变动{change_pct*100:.0f}%"
+        except Exception:
+            pass
+    elif "签名" in field_name:
+        if old_val == "True" and new_val == "False":
+            risk = ChangeRiskLevel.HIGH
+            note = f"{field_name}从有变为无，需确认是否丢失签名"
+    elif field_name in ("租期开始", "租期结束"):
+        try:
+            old_d = date.fromisoformat(old_val)
+            new_d = date.fromisoformat(new_val)
+            if field_name == "租期结束" and new_d < old_d:
+                days = (old_d - new_d).days
+                risk = ChangeRiskLevel.HIGH
+                note = f"租期缩短{days}天，需确认是否提前解约"
+        except Exception:
+            pass
+    elif field_name == "租客姓名":
+        if old_val and new_val and old_val != new_val:
+            risk = ChangeRiskLevel.HIGH
+            note = f"租客变更：{old_val} → {new_val}，需确认转租手续"
+    elif field_name == "房号":
+        if old_val and new_val and old_val != new_val:
+            risk = ChangeRiskLevel.HIGH
+            note = f"房号变更：{old_val} → {new_val}，需确认合同是否对应正确房源"
+
+    return risk, note
+
+
 def compare_and_merge_changes(old: Contract, new: Contract) -> None:
     compare_fields = [
         ("room_number", "房号"),
@@ -401,12 +459,15 @@ def compare_and_merge_changes(old: Contract, new: Contract) -> None:
     for attr, label in compare_fields:
         old_val = getattr(old, attr)
         new_val = getattr(new, attr)
+        old_str = str(old_val)
+        new_str = str(new_val)
         if isinstance(old_val, date):
-            old_val = str(old_val)
+            old_str = str(old_val)
         if isinstance(new_val, date):
-            new_val = str(new_val)
-        if str(old_val) != str(new_val):
-            new.add_field_change(label, str(old_val), str(new_val))
+            new_str = str(new_val)
+        if old_str != new_str:
+            risk, note = assess_change_risk(label, old_str, new_str)
+            new.add_field_change(label, old_str, new_str, change_risk=risk, risk_note=note)
 
     new.issues = old.issues
     new.review_notes = old.review_notes
