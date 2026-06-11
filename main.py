@@ -34,11 +34,13 @@ from scanner import scan_folder
 from storage import (
     add_batch,
     get_batches,
+    get_contracts_by_batch,
     load_contracts,
     load_rule,
     save_contracts,
     save_rule,
     update_contract,
+    update_contracts,
 )
 
 
@@ -296,6 +298,14 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
         console.print("[yellow]⚠️  没有合同数据，请先运行 scan 命令[/yellow]")
         return
 
+    if batch_id:
+        batch_contracts = get_contracts_by_batch(batch_id, data_dir)
+        if not batch_contracts:
+            console.print(f"[yellow]⚠️  批次 {batch_id} 不存在或没有合同[/yellow]")
+            return
+        console.print(f"   使用批次快照: {batch_id} ({len(batch_contracts)} 份合同)")
+        contracts = batch_contracts
+
     rule = load_rule(data_dir)
     contracts = check_all_contracts(contracts, rule)
 
@@ -311,7 +321,6 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
         agent=agent,
         issue_type=issue_type_val,
         high_risk_only=high_risk_only,
-        batch_id=batch_id,
         start_date=start_d,
         end_date=end_d,
     )
@@ -353,7 +362,7 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
 @cli.command("export", help="导出报表到文件")
 @click.argument("report_type", type=click.Choice(["pending", "expiring", "summary", "progress", "all"]))
 @click.option("--output", "-o", type=click.Path(), help="输出文件路径(单报表)或目录(all)")
-@click.option("--days", type=int, default=30, help="到期清单: 未来N天内到期 (默认30)")
+@click.option("--days", type=int, default=None, help="到期清单: 未来N天内到期 (默认使用规则配置)")
 @click.option("--high-risk-only", is_flag=True, help="只包含高风险合同")
 @click.option("--room", help="按房源筛选")
 @click.option("--agent", help="按经纪人筛选")
@@ -371,8 +380,21 @@ def export_cmd(ctx, report_type, output, days, high_risk_only, room, agent,
         console.print("[yellow]⚠️  没有合同数据，请先运行 scan 命令[/yellow]")
         return
 
+    if batch_id:
+        batch_contracts = get_contracts_by_batch(batch_id, data_dir)
+        if not batch_contracts:
+            console.print(f"[yellow]⚠️  批次 {batch_id} 不存在或没有合同[/yellow]")
+            return
+        console.print(f"   使用批次快照: {batch_id} ({len(batch_contracts)} 份合同)")
+        contracts = batch_contracts
+
     rule = load_rule(data_dir)
     contracts = check_all_contracts(contracts, rule)
+
+    if days is None:
+        days = rule.expiring_days_default
+    else:
+        console.print(f"   使用自定义到期天数: {days} 天 (规则默认: {rule.expiring_days_default} 天)")
 
     start_d = date.fromisoformat(start_date) if start_date else None
     end_d = date.fromisoformat(end_date) if end_date else None
@@ -382,7 +404,6 @@ def export_cmd(ctx, report_type, output, days, high_risk_only, room, agent,
         room=room,
         agent=agent,
         high_risk_only=high_risk_only,
-        batch_id=batch_id,
         start_date=start_d,
         end_date=end_d,
     )
@@ -516,7 +537,7 @@ def review(ctx, high_risk_only, sort_by, room, agent, export_progress):
         elif choice == "p":
             idx = max(0, idx - 1)
         elif choice == "s":
-            save_contracts(contracts, data_dir)
+            update_contracts(contracts, data_dir)
             modified = False
             console.print("[green]✅ 已保存[/green]")
             continue
@@ -556,7 +577,7 @@ def review(ctx, high_risk_only, sort_by, room, agent, export_progress):
 
     if modified:
         if Confirm.ask("有未保存的更改，是否保存?"):
-            save_contracts(contracts, data_dir)
+            update_contracts(contracts, data_dir)
             console.print("[green]✅ 已保存[/green]")
 
     pending_total = sum(c.pending_issues_count for c in contracts)

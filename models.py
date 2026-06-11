@@ -82,6 +82,7 @@ class ScanBatch(BaseModel):
     updated_count: int = 0
     unchanged_count: int = 0
     rule_name: str = "default"
+    contract_file_paths: List[str] = Field(default_factory=list)
 
 
 class Contract(BaseModel):

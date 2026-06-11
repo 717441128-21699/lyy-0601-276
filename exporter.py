@@ -187,8 +187,6 @@ def get_contract_summary(contracts: List[Contract]) -> List[dict]:
 def get_review_progress(contracts: List[Contract]) -> List[dict]:
     items = []
     for c in contracts:
-        if not c.issues:
-            continue
         pending = c.pending_issues_count
         resolved = c.resolved_issues_count
         ignored = sum(1 for i in c.issues if i.status == IssueStatus.IGNORED)
@@ -208,7 +206,7 @@ def get_review_progress(contracts: List[Contract]) -> List[dict]:
             "处理进度(%)": round(progress, 1),
             "备注": c.review_notes,
         })
-    items.sort(key=lambda x: x["处理进度(%)"])
+    items.sort(key=lambda x: (x["处理进度(%)"], x["问题总数"]))
     return items
 
 

@@ -27,7 +27,7 @@ def get_rule_path(base_path: Optional[str] = None) -> str:
 
 
 def generate_batch_id() -> str:
-    return datetime.now().strftime("batch_%Y%m%d_%H%M%S")
+    return datetime.now().strftime("batch_%Y%m%d_%H%M%S_%f")[:-3]
 
 
 def save_database(db: ContractDatabase, base_path: Optional[str] = None) -> None:
@@ -122,6 +122,7 @@ def add_batch(
         updated_count=scan_result.updated_count,
         unchanged_count=scan_result.unchanged_count,
         rule_name=rule.rule_name,
+        contract_file_paths=[c.file_path for c in scan_result.all_contracts],
     )
 
     db.batches.insert(0, batch)
@@ -140,7 +141,11 @@ def get_batches(base_path: Optional[str] = None) -> List[ScanBatch]:
 
 def get_contracts_by_batch(batch_id: str, base_path: Optional[str] = None) -> List[Contract]:
     db = load_database(base_path)
-    return [c for c in db.contracts if c.scan_batch_id == batch_id]
+    batch = db.get_batch_by_id(batch_id)
+    if not batch:
+        return []
+    path_set = set(batch.contract_file_paths)
+    return [c for c in db.contracts if c.file_path in path_set]
 
 
 def update_contract(contract: Contract, base_path: Optional[str] = None) -> None:
@@ -149,4 +154,16 @@ def update_contract(contract: Contract, base_path: Optional[str] = None) -> None
         if c.file_path == contract.file_path:
             db.contracts[i] = contract
             break
+    save_database(db, base_path)
+
+
+def update_contracts(updated_contracts: List[Contract], base_path: Optional[str] = None) -> None:
+    db = load_database(base_path)
+    update_map = {c.file_path: c for c in updated_contracts}
+    for i, c in enumerate(db.contracts):
+        if c.file_path in update_map:
+            db.contracts[i] = update_map[c.file_path]
+    for c in updated_contracts:
+        if c.file_path not in {x.file_path for x in db.contracts}:
+            db.contracts.append(c)
     save_database(db, base_path)
