@@ -15,11 +15,13 @@ from rich.prompt import Prompt, Confirm
 from checker import check_all_contracts
 from exporter import (
     export_all,
+    export_by_agent,
     export_contract_summary,
     export_expiring_list,
     export_pending_list,
     export_review_progress,
     filter_contracts,
+    follow_up_action_label,
     get_contract_summary,
     get_expiring_contracts,
     get_pending_items,
@@ -29,7 +31,7 @@ from exporter import (
     risk_level_label,
     sort_contracts,
 )
-from models import Contract, IssueType, RiskLevel, IssueStatus, RuleConfig
+from models import Contract, FollowUpAction, IssueType, RiskLevel, IssueStatus, RuleConfig
 from scanner import scan_folder
 from storage import (
     add_batch,
@@ -122,6 +124,29 @@ def display_contract_card(c: Contract, show_issues: bool = True, show_status: bo
                 elements.append(Text(f"      💡 建议: {issue.suggestion}", style="dim"))
             if issue.review_note:
                 elements.append(Text(f"      📝 备注: {issue.review_note}", style="blue dim"))
+            if issue.latest_follow_up:
+                fu = issue.latest_follow_up
+                fu_info = f"      📞 跟进: {follow_up_action_label(fu.action)} - {fu.content}"
+                if fu.operator:
+                    fu_info += f" ({fu.operator})"
+                elements.append(Text(fu_info, style="cyan dim"))
+
+    if c.field_changes:
+        elements.append(Text(""))
+        elements.append(Text("🔄 字段变更历史:", style="bold magenta"))
+        for fc in c.field_changes[-5:]:
+            ct = fc.change_time[:16].replace("T", " ")
+            elements.append(Text(f"   [{ct}] {fc.field_name}: {fc.old_value} → {fc.new_value}", style="magenta dim"))
+        if len(c.field_changes) > 5:
+            elements.append(Text(f"   ... 还有 {len(c.field_changes)-5} 条变更", style="dim"))
+
+    latest = c.latest_follow_up
+    if latest:
+        fu_info = f"📞 最近跟进: {follow_up_action_label(latest.action)} - {latest.content}"
+        if latest.operator:
+            fu_info += f" (负责人: {latest.operator})"
+        elements.append(Text(""))
+        elements.append(Text(fu_info, style="bold cyan"))
 
     title = Text(Path(c.file_path).name, style="bold")
     console.print(Panel(Group(*elements), title=title, border_style=color))
@@ -341,9 +366,18 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
     table.add_column("风险", justify="center")
     table.add_column("待处理", justify="right")
     table.add_column("已处理", justify="right")
+    table.add_column("最近跟进")
+    table.add_column("变更", justify="right")
 
     for c in contracts:
         color = risk_color(c.risk_level)
+        latest = c.latest_follow_up
+        if latest:
+            follow_info = f"{follow_up_action_label(latest.action)}"
+            if latest.operator:
+                follow_info += f"@{latest.operator}"
+        else:
+            follow_info = "-"
         table.add_row(
             Path(c.file_path).name,
             c.room_number or "-",
@@ -354,14 +388,16 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
             Text(risk_level_label(c.risk_level), style=f"bold {color}"),
             str(c.pending_issues_count),
             str(c.resolved_issues_count),
+            follow_info,
+            str(len(c.field_changes)),
         )
 
     console.print(table)
 
 
 @cli.command("export", help="导出报表到文件")
-@click.argument("report_type", type=click.Choice(["pending", "expiring", "summary", "progress", "all"]))
-@click.option("--output", "-o", type=click.Path(), help="输出文件路径(单报表)或目录(all)")
+@click.argument("report_type", type=click.Choice(["pending", "expiring", "summary", "progress", "all", "by-agent"]))
+@click.option("--output", "-o", type=click.Path(), help="输出文件路径(单报表)或目录(all/by-agent)")
 @click.option("--days", type=int, default=None, help="到期清单: 未来N天内到期 (默认使用规则配置)")
 @click.option("--high-risk-only", is_flag=True, help="只包含高风险合同")
 @click.option("--room", help="按房源筛选")
@@ -370,9 +406,10 @@ def list_cmd(ctx, room, expire_month, agent, issue_type, high_risk_only,
 @click.option("--start-date", help="租期开始日期(YYYY-MM-DD)起")
 @click.option("--end-date", help="租期结束日期(YYYY-MM-DD)止")
 @click.option("--format", "fmt", type=click.Choice(["xlsx", "csv"]), default="xlsx", help="导出格式")
+@click.option("--split-by-agent", is_flag=True, help="export all时按经纪人拆分额外输出")
 @click.pass_context
 def export_cmd(ctx, report_type, output, days, high_risk_only, room, agent,
-               batch_id, start_date, end_date, fmt):
+               batch_id, start_date, end_date, fmt, split_by_agent):
     data_dir = ctx.obj["data_dir"]
     contracts = load_contracts(data_dir)
 
@@ -416,30 +453,25 @@ def export_cmd(ctx, report_type, output, days, high_risk_only, room, agent,
 
     if report_type == "all":
         out_dir = output or "contract_reports"
-        paths = []
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        Path(out_dir).mkdir(parents=True, exist_ok=True)
-
-        pending_path = str(Path(out_dir) / f"待补充清单_{timestamp}{ext}")
-        export_pending_list(contracts, pending_path)
-        paths.append(pending_path)
-
-        expiring_path = str(Path(out_dir) / f"到期清单_{days}天_{timestamp}{ext}")
-        export_expiring_list(contracts, expiring_path, days)
-        paths.append(expiring_path)
-
-        summary_path = str(Path(out_dir) / f"合同摘要_{timestamp}{ext}")
-        export_contract_summary(contracts, summary_path)
-        paths.append(summary_path)
-
-        progress_path = str(Path(out_dir) / f"处理进度表_{timestamp}{ext}")
-        export_review_progress(contracts, progress_path)
-        paths.append(progress_path)
-
+        paths = export_all(contracts, out_dir, days=days, split_by_agent=split_by_agent, fmt=fmt)
         console.print("[bold green]✅ 所有报表已导出:[/bold green]")
         for p in paths:
             console.print(f"   📄 {p}")
         console.print(f"   共 {len(contracts)} 份合同数据")
+        if split_by_agent:
+            agents = sorted(set(c.agent_name or "未指定经纪人" for c in contracts))
+            console.print(f"   按 {len(agents)} 位经纪人拆分输出")
+        return
+
+    if report_type == "by-agent":
+        out_dir = output or "reports_by_agent"
+        paths = export_by_agent(contracts, out_dir, days=days, fmt=fmt)
+        agents = sorted(set(c.agent_name or "未指定经纪人" for c in contracts))
+        console.print(f"[bold green]✅ 已按经纪人拆分导出:[/bold green]")
+        console.print(f"   共 {len(agents)} 位经纪人，{len(paths)} 个文件")
+        for agent in agents:
+            count = sum(1 for c in contracts if (c.agent_name or "未指定经纪人") == agent)
+            console.print(f"   👤 {agent}: {count} 份合同 → {out_dir}/{agent.replace('/', '_').replace(chr(92), '_').replace(' ', '')}/")
         return
 
     if report_type == "pending":
@@ -587,6 +619,166 @@ def review(ctx, high_risk_only, sort_by, room, agent, export_progress):
     if export_progress:
         export_review_progress(load_contracts(data_dir), export_progress)
         console.print(f"📄 处理进度表已导出: {export_progress}")
+
+
+@cli.command("follow-up", help="记录合同跟进动作（补签、补证件、改租金等）")
+@click.option("--room", help="按房号筛选合同")
+@click.option("--agent", help="按经纪人筛选")
+@click.option("--high-risk-only", is_flag=True, help="只跟进高风险合同")
+@click.option("--all", "follow_all", is_flag=True, help="非交互批量模式：给所有合同登记一条跟进")
+@click.option("--action", type=click.Choice([
+    "sign_supplement", "id_supplement", "rent_adjust", "deposit_adjust",
+    "date_correct", "phone_call", "wechat", "visit", "other"
+]), help="跟进动作类型")
+@click.option("--content", help="跟进内容描述")
+@click.option("--operator", help="跟进负责人")
+@click.option("--issue-idx", type=int, default=-1, help="指定问题编号(从1开始)，不指定则记录到合同级别")
+@click.option("--export", "export_path", type=click.Path(), help="完成后导出处理进度表")
+@click.pass_context
+def follow_up_cmd(ctx, room, agent, high_risk_only, follow_all, action,
+                  content, operator, issue_idx, export_path):
+    data_dir = ctx.obj["data_dir"]
+    all_contracts = load_contracts(data_dir)
+
+    if not all_contracts:
+        console.print("[yellow]⚠️  没有合同数据，请先运行 scan 命令[/yellow]")
+        return
+
+    rule = load_rule(data_dir)
+    all_contracts = check_all_contracts(all_contracts, rule)
+
+    filtered = filter_contracts(
+        all_contracts,
+        room=room,
+        agent=agent,
+        high_risk_only=high_risk_only,
+    )
+
+    if not filtered:
+        console.print("[yellow]⚠️  没有符合条件的合同[/yellow]")
+        return
+
+    if follow_all:
+        if not action or not content:
+            console.print("[red]❌ 批量模式必须指定 --action 和 --content[/red]")
+            return
+        action_val = FollowUpAction(action)
+        count = 0
+        for c in filtered:
+            issue_index = issue_idx - 1 if issue_idx > 0 else -1
+            c.add_follow_up(action_val, content, operator=operator, issue_index=issue_index)
+            count += 1
+        update_contracts(filtered, data_dir)
+        console.print(f"[bold green]✅ 批量跟进完成[/bold green]")
+        console.print(f"   共登记 {count} 条跟进: {follow_up_action_label(action_val)} - {content}")
+        if operator:
+            console.print(f"   负责人: {operator}")
+
+    else:
+        console.print(f"📋 共 {len(filtered)} 份合同可选，开始交互跟进\n")
+        idx = 0
+        modified = False
+
+        while 0 <= idx < len(filtered):
+            c = filtered[idx]
+            console.print(f"[bold]--- 第 {idx+1}/{len(filtered)} 份 ---[/bold]")
+            display_contract_card(c, show_issues=True, show_status=True)
+
+            choice = Prompt.ask(
+                "\n操作",
+                choices=["a", "f", "n", "p", "q", "s"],
+                default="n",
+            )
+            console.print("  a=登记跟进  f=查看跟进历史  n=下一份  p=上一份  q=退出  s=保存")
+
+            if choice == "q":
+                console.print("\n[yellow]⏹  退出跟进[/yellow]")
+                break
+            elif choice == "n":
+                idx += 1
+            elif choice == "p":
+                idx = max(0, idx - 1)
+            elif choice == "s":
+                update_contracts(filtered, data_dir)
+                modified = False
+                console.print("[green]✅ 已保存[/green]")
+                continue
+            elif choice == "f":
+                console.print("\n📞 跟进历史:")
+                all_fu: list = []
+                for fu in c.follow_ups:
+                    all_fu.append((-1, fu))
+                for i, issue in enumerate(c.issues):
+                    for fu in issue.follow_ups:
+                        all_fu.append((i, fu))
+                all_fu.sort(key=lambda x: x[1].follow_time)
+                if not all_fu:
+                    console.print("   (暂无跟进记录)")
+                for i, fu in all_fu:
+                    scope = f"问题[{i+1}]" if i >= 0 else "合同"
+                    ct = fu.follow_time[:16].replace("T", " ")
+                    op = f" ({fu.operator})" if fu.operator else ""
+                    console.print(f"   [{ct}] {scope} {follow_up_action_label(fu.action)}: {fu.content}{op}")
+                console.print("")
+                continue
+            elif choice == "a":
+                if not action:
+                    act_choice = Prompt.ask(
+                        "选择跟进动作",
+                        choices=["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+                        default="6",
+                    )
+                    console.print("  1=补签 2=补证件 3=改租金 4=改押金 5=改日期 6=电话 7=微信 8=上门 9=其他")
+                    action_map = {
+                        "1": FollowUpAction.SIGN_SUPPLEMENT,
+                        "2": FollowUpAction.ID_SUPPLEMENT,
+                        "3": FollowUpAction.RENT_ADJUST,
+                        "4": FollowUpAction.DEPOSIT_ADJUST,
+                        "5": FollowUpAction.DATE_CORRECT,
+                        "6": FollowUpAction.PHONE_CALL,
+                        "7": FollowUpAction.WECHAT,
+                        "8": FollowUpAction.VISIT,
+                        "9": FollowUpAction.OTHER,
+                    }
+                    action_val = action_map[act_choice]
+                else:
+                    action_val = FollowUpAction(action)
+
+                if issue_idx <= 0 and c.issues:
+                    issue_sel = Prompt.ask(
+                        "关联哪个问题? (0=合同级别, 留空=选问题编号)",
+                        default="0",
+                    )
+                    try:
+                        sel = int(issue_sel)
+                        issue_index = sel - 1 if sel > 0 else -1
+                    except ValueError:
+                        issue_index = -1
+                else:
+                    issue_index = issue_idx - 1 if issue_idx > 0 else -1
+
+                if not content:
+                    fu_content = Prompt.ask("跟进内容")
+                else:
+                    fu_content = content
+
+                if not operator:
+                    fu_operator = Prompt.ask("负责人(可留空)", default="")
+                else:
+                    fu_operator = operator
+
+                c.add_follow_up(action_val, fu_content, operator=fu_operator, issue_index=issue_index)
+                modified = True
+                console.print(f"[green]✅ 已登记跟进: {follow_up_action_label(action_val)} - {fu_content}[/green]")
+
+        if modified:
+            if Confirm.ask("有未保存的更改，是否保存?"):
+                update_contracts(filtered, data_dir)
+                console.print("[green]✅ 已保存[/green]")
+
+    if export_path:
+        export_review_progress(load_contracts(data_dir), export_path)
+        console.print(f"📄 处理进度表已导出: {export_path}")
 
 
 @cli.group("rule", help="规则配置管理")

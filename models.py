@@ -28,12 +28,40 @@ class IssueStatus(str, Enum):
     IGNORED = "ignored"
 
 
+class FollowUpAction(str, Enum):
+    SIGN_SUPPLEMENT = "sign_supplement"
+    ID_SUPPLEMENT = "id_supplement"
+    RENT_ADJUST = "rent_adjust"
+    DEPOSIT_ADJUST = "deposit_adjust"
+    DATE_CORRECT = "date_correct"
+    PHONE_CALL = "phone_call"
+    WECHAT = "wechat"
+    VISIT = "visit"
+    OTHER = "other"
+
+
 class PaymentMethod(str, Enum):
     MONTHLY = "monthly"
     QUARTERLY = "quarterly"
     SEMI_ANNUAL = "semi_annual"
     ANNUAL = "annual"
     OTHER = "other"
+
+
+class FollowUpRecord(BaseModel):
+    follow_id: str = ""
+    issue_index: int = -1
+    action: FollowUpAction = FollowUpAction.OTHER
+    content: str = ""
+    operator: str = ""
+    follow_time: str = ""
+
+
+class FieldChange(BaseModel):
+    field_name: str
+    old_value: str = ""
+    new_value: str = ""
+    change_time: str = ""
 
 
 class Issue(BaseModel):
@@ -44,11 +72,30 @@ class Issue(BaseModel):
     status: IssueStatus = IssueStatus.PENDING
     review_note: str = ""
     review_time: Optional[str] = None
+    follow_ups: List[FollowUpRecord] = Field(default_factory=list)
 
     def mark_status(self, status: IssueStatus, note: str = "") -> None:
         self.status = status
         self.review_note = note
         self.review_time = datetime.now().isoformat()
+
+    def add_follow_up(self, action: FollowUpAction, content: str, operator: str = "") -> FollowUpRecord:
+        record = FollowUpRecord(
+            follow_id=datetime.now().strftime("fu_%Y%m%d_%H%M%S_%f")[:-3],
+            issue_index=-1,
+            action=action,
+            content=content,
+            operator=operator,
+            follow_time=datetime.now().isoformat(),
+        )
+        self.follow_ups.append(record)
+        return record
+
+    @property
+    def latest_follow_up(self) -> Optional[FollowUpRecord]:
+        if not self.follow_ups:
+            return None
+        return sorted(self.follow_ups, key=lambda x: x.follow_time, reverse=True)[0]
 
 
 class RuleConfig(BaseModel):
@@ -109,6 +156,8 @@ class Contract(BaseModel):
     review_notes: str = ""
     first_scan_time: Optional[str] = None
     last_scan_time: Optional[str] = None
+    field_changes: List[FieldChange] = Field(default_factory=list)
+    follow_ups: List[FollowUpRecord] = Field(default_factory=list)
 
     @property
     def is_valid(self) -> bool:
@@ -140,6 +189,42 @@ class Contract(BaseModel):
 
     def get_issues_by_type(self, issue_type: IssueType) -> List[Issue]:
         return [i for i in self.issues if i.issue_type == issue_type]
+
+    def add_follow_up(self, action: FollowUpAction, content: str,
+                      operator: str = "", issue_index: int = -1) -> FollowUpRecord:
+        record = FollowUpRecord(
+            follow_id=datetime.now().strftime("fu_%Y%m%d_%H%M%S_%f")[:-3],
+            issue_index=issue_index,
+            action=action,
+            content=content,
+            operator=operator,
+            follow_time=datetime.now().isoformat(),
+        )
+        if issue_index >= 0 and issue_index < len(self.issues):
+            self.issues[issue_index].follow_ups.append(record)
+        else:
+            self.follow_ups.append(record)
+        return record
+
+    @property
+    def latest_follow_up(self) -> Optional[FollowUpRecord]:
+        all_follows: List[FollowUpRecord] = []
+        all_follows.extend(self.follow_ups)
+        for issue in self.issues:
+            all_follows.extend(issue.follow_ups)
+        if not all_follows:
+            return None
+        return sorted(all_follows, key=lambda x: x.follow_time, reverse=True)[0]
+
+    def add_field_change(self, field_name: str, old_val: str, new_val: str) -> None:
+        if str(old_val) == str(new_val):
+            return
+        self.field_changes.append(FieldChange(
+            field_name=field_name,
+            old_value=str(old_val),
+            new_value=str(new_val),
+            change_time=datetime.now().isoformat(),
+        ))
 
 
 class ContractDatabase(BaseModel):

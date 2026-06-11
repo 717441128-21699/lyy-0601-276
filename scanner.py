@@ -380,6 +380,41 @@ class ScanResult:
         return len(self.unchanged_contracts)
 
 
+def compare_and_merge_changes(old: Contract, new: Contract) -> None:
+    compare_fields = [
+        ("room_number", "房号"),
+        ("tenant_name", "租客姓名"),
+        ("tenant_id_number", "租客身份证"),
+        ("landlord_name", "房东姓名"),
+        ("landlord_id_number", "房东身份证"),
+        ("start_date", "租期开始"),
+        ("end_date", "租期结束"),
+        ("monthly_rent", "月租金"),
+        ("deposit", "押金"),
+        ("payment_method", "付款方式"),
+        ("agent_name", "经纪人"),
+        ("has_tenant_signature", "租客签名"),
+        ("has_landlord_signature", "房东签名"),
+        ("has_agent_signature", "经纪人签名"),
+        ("sign_date", "签署日期"),
+    ]
+    for attr, label in compare_fields:
+        old_val = getattr(old, attr)
+        new_val = getattr(new, attr)
+        if isinstance(old_val, date):
+            old_val = str(old_val)
+        if isinstance(new_val, date):
+            new_val = str(new_val)
+        if str(old_val) != str(new_val):
+            new.add_field_change(label, str(old_val), str(new_val))
+
+    new.issues = old.issues
+    new.review_notes = old.review_notes
+    new.first_scan_time = old.first_scan_time
+    new.follow_ups = old.follow_ups
+    new.field_changes = old.field_changes + new.field_changes
+
+
 def scan_folder(
     folder_path: str,
     recursive: bool = False,
@@ -409,10 +444,7 @@ def scan_folder(
 
             if fpath_str in existing_map:
                 old_contract = existing_map[fpath_str]
-                new_contract.issues = old_contract.issues
-                new_contract.review_notes = old_contract.review_notes
-                new_contract.first_scan_time = old_contract.first_scan_time
-                new_contract.scan_batch_id = old_contract.scan_batch_id
+                compare_and_merge_changes(old_contract, new_contract)
                 result.updated_contracts.append(new_contract)
             else:
                 result.new_contracts.append(new_contract)

@@ -3,8 +3,8 @@
     {
       "contract_id": "合同001_正常合同",
       "file_path": "contracts\\合同001_正常合同.txt",
-      "file_mtime": 1781175437.8870134,
-      "scan_batch_id": "batch_20260611_194723_572",
+      "file_mtime": 1781179360.869313,
+      "scan_batch_id": "batch_20260611_200249_310",
       "room_number": "3-1-1502",
       "tenant_name": "李明",
       "tenant_id_number": "310101199205124567",
@@ -12,9 +12,9 @@
       "landlord_id_number": "110101199003078732",
       "start_date": "2025-01-01",
       "end_date": "2025-12-31",
-      "monthly_rent": 5800.0,
-      "deposit": 5800.0,
-      "payment_method": "quarterly",
+      "monthly_rent": 6200.0,
+      "deposit": 6200.0,
+      "payment_method": "monthly",
       "agent_name": "王芳",
       "has_tenant_signature": true,
       "has_landlord_signature": true,
@@ -26,9 +26,10 @@
           "description": "承租方身份证号格式错误: 310101199205124567",
           "risk_level": "high",
           "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
-          "status": "confirmed",
-          "review_note": "测试备注",
-          "review_time": "2026-06-11T19:47:55.188705"
+          "status": "pending",
+          "review_note": "",
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -37,7 +38,8 @@
           "suggestion": "请核实出租方身份证号并重新填写",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "lease_overlap",
@@ -46,18 +48,49 @@
           "suggestion": "请核实该房源是否同时租给多方，及时处理一房多租问题",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         }
       ],
       "review_notes": "",
-      "first_scan_time": "2026-06-11T19:47:23.572680",
-      "last_scan_time": "2026-06-11T19:47:23.572680"
+      "first_scan_time": "2026-06-11T20:01:55.718638",
+      "last_scan_time": "2026-06-11T20:02:49.310447",
+      "field_changes": [
+        {
+          "field_name": "月租金",
+          "old_value": "5800.0",
+          "new_value": "6200.0",
+          "change_time": "2026-06-11T20:02:49.308565"
+        },
+        {
+          "field_name": "押金",
+          "old_value": "5800.0",
+          "new_value": "6200.0",
+          "change_time": "2026-06-11T20:02:49.308607"
+        },
+        {
+          "field_name": "付款方式",
+          "old_value": "PaymentMethod.QUARTERLY",
+          "new_value": "PaymentMethod.MONTHLY",
+          "change_time": "2026-06-11T20:02:49.308622"
+        }
+      ],
+      "follow_ups": [
+        {
+          "follow_id": "fu_20260611_200156_126",
+          "issue_index": -1,
+          "action": "wechat",
+          "content": "微信通知租客补签",
+          "operator": "张主管",
+          "follow_time": "2026-06-11T20:01:56.126274"
+        }
+      ]
     },
     {
       "contract_id": "合同002_缺租客签名_身份证错误",
       "file_path": "contracts\\合同002_缺租客签名_身份证错误.txt",
       "file_mtime": 1781175442.277598,
-      "scan_batch_id": "batch_20260611_194723_572",
+      "scan_batch_id": "batch_20260611_200249_310",
       "room_number": "3-1-1805",
       "tenant_name": "陈小红",
       "tenant_id_number": "",
@@ -81,7 +114,8 @@
           "suggestion": "请联系承租方(租客)补签合同",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -90,7 +124,8 @@
           "suggestion": "请补充承租方身份证号码",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -99,18 +134,30 @@
           "suggestion": "请核实出租方身份证号并重新填写",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         }
       ],
       "review_notes": "",
-      "first_scan_time": "2026-06-11T19:47:23.572680",
-      "last_scan_time": "2026-06-11T19:47:23.572680"
+      "first_scan_time": "2026-06-11T20:01:55.718638",
+      "last_scan_time": "2026-06-11T20:02:49.310447",
+      "field_changes": [],
+      "follow_ups": [
+        {
+          "follow_id": "fu_20260611_200156_126",
+          "issue_index": -1,
+          "action": "wechat",
+          "content": "微信通知租客补签",
+          "operator": "张主管",
+          "follow_time": "2026-06-11T20:01:56.126304"
+        }
+      ]
     },
     {
       "contract_id": "合同003_租期重叠_租金异常",
       "file_path": "contracts\\合同003_租期重叠_租金异常.txt",
       "file_mtime": 1781175446.8540099,
-      "scan_batch_id": "batch_20260611_194723_572",
+      "scan_batch_id": "batch_20260611_200249_310",
       "room_number": "3-1-1502",
       "tenant_name": "孙强",
       "tenant_id_number": "320102198807191234",
@@ -128,22 +175,14 @@
       "sign_date": "2025-05-20",
       "issues": [
         {
-          "issue_type": "abnormal_rent",
-          "description": "租金异常偏高/偏低: 月租金8800元, 同房源平均租金5800元, 偏离51.7%",
-          "risk_level": "high",
-          "suggestion": "请核实租金金额是否正确，确认是否有特殊约定",
-          "status": "pending",
-          "review_note": "",
-          "review_time": null
-        },
-        {
           "issue_type": "invalid_id_number",
           "description": "承租方身份证号格式错误: 320102198807191234",
           "risk_level": "high",
           "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -152,7 +191,8 @@
           "suggestion": "请核实出租方身份证号并重新填写",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "lease_overlap",
@@ -161,18 +201,21 @@
           "suggestion": "请核实该房源是否同时租给多方，及时处理一房多租问题",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         }
       ],
       "review_notes": "",
-      "first_scan_time": "2026-06-11T19:47:23.572680",
-      "last_scan_time": "2026-06-11T19:47:23.572680"
+      "first_scan_time": "2026-06-11T20:01:55.718638",
+      "last_scan_time": "2026-06-11T20:02:49.310447",
+      "field_changes": [],
+      "follow_ups": []
     },
     {
       "contract_id": "合同004_日期冲突_缺签名_租金0",
       "file_path": "contracts\\合同004_日期冲突_缺签名_租金0.txt",
       "file_mtime": 1781175459.584929,
-      "scan_batch_id": "batch_20260611_194723_572",
+      "scan_batch_id": "batch_20260611_200249_310",
       "room_number": "A-801",
       "tenant_name": "吴磊",
       "tenant_id_number": "510104199006253472",
@@ -196,7 +239,8 @@
           "suggestion": "请联系承租方(租客), 出租方(房东), 经纪人(居间方)补签合同",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "date_conflict",
@@ -205,7 +249,8 @@
           "suggestion": "请核对并修正租期的开始和结束日期",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "date_conflict",
@@ -214,7 +259,8 @@
           "suggestion": "请确认签署日期是否正确，如为补签请注明",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "abnormal_rent",
@@ -223,7 +269,8 @@
           "suggestion": "请填写正确的月租金金额",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -232,7 +279,8 @@
           "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -241,18 +289,21 @@
           "suggestion": "请核实出租方身份证号并重新填写",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         }
       ],
       "review_notes": "",
-      "first_scan_time": "2026-06-11T19:47:23.572680",
-      "last_scan_time": "2026-06-11T19:47:23.572680"
+      "first_scan_time": "2026-06-11T20:01:55.718638",
+      "last_scan_time": "2026-06-11T20:02:49.310447",
+      "field_changes": [],
+      "follow_ups": []
     },
     {
       "contract_id": "合同005_即将到期_高风险期",
       "file_path": "contracts\\合同005_即将到期_高风险期.txt",
       "file_mtime": 1781175463.93441,
-      "scan_batch_id": "batch_20260611_194723_572",
+      "scan_batch_id": "batch_20260611_200249_310",
       "room_number": "B-1203",
       "tenant_name": "黄丽",
       "tenant_id_number": "330106199309185678",
@@ -276,7 +327,8 @@
           "suggestion": "请核实承租方身份证号并重新填写正确的18位身份证号码",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         },
         {
           "issue_type": "invalid_id_number",
@@ -285,18 +337,47 @@
           "suggestion": "请核实出租方身份证号并重新填写",
           "status": "pending",
           "review_note": "",
-          "review_time": null
+          "review_time": null,
+          "follow_ups": []
         }
       ],
       "review_notes": "",
-      "first_scan_time": "2026-06-11T19:47:23.572680",
-      "last_scan_time": "2026-06-11T19:47:23.572680"
+      "first_scan_time": "2026-06-11T20:01:55.718638",
+      "last_scan_time": "2026-06-11T20:02:49.310447",
+      "field_changes": [],
+      "follow_ups": [
+        {
+          "follow_id": "fu_20260611_200156_126",
+          "issue_index": -1,
+          "action": "wechat",
+          "content": "微信通知租客补签",
+          "operator": "张主管",
+          "follow_time": "2026-06-11T20:01:56.126322"
+        }
+      ]
     }
   ],
   "batches": [
     {
-      "batch_id": "batch_20260611_194723_572",
-      "scan_time": "2026-06-11T19:47:23.572680",
+      "batch_id": "batch_20260611_200249_310",
+      "scan_time": "2026-06-11T20:02:49.310447",
+      "folder": "contracts",
+      "total_count": 5,
+      "new_count": 0,
+      "updated_count": 1,
+      "unchanged_count": 4,
+      "rule_name": "default",
+      "contract_file_paths": [
+        "contracts\\合同001_正常合同.txt",
+        "contracts\\合同002_缺租客签名_身份证错误.txt",
+        "contracts\\合同003_租期重叠_租金异常.txt",
+        "contracts\\合同004_日期冲突_缺签名_租金0.txt",
+        "contracts\\合同005_即将到期_高风险期.txt"
+      ]
+    },
+    {
+      "batch_id": "batch_20260611_200155_718",
+      "scan_time": "2026-06-11T20:01:55.718638",
       "folder": "contracts",
       "total_count": 5,
       "new_count": 5,
@@ -312,7 +393,7 @@
       ]
     }
   ],
-  "last_scan_time": "2026-06-11T19:47:23.572680",
+  "last_scan_time": "2026-06-11T20:03:00.560968",
   "current_rule": {
     "rule_name": "default",
     "rent_deviation_threshold": 0.5,

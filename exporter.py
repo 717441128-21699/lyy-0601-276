@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-from models import Contract, RiskLevel, IssueType, IssueStatus
+from models import Contract, RiskLevel, IssueType, IssueStatus, FollowUpAction
 
 
 def format_date(d: Optional[date]) -> str:
@@ -43,6 +43,21 @@ def issue_type_label(it) -> str:
         "invalid_id_number": "身份证号问题",
     }
     return labels.get(getattr(it, "value", it), str(it))
+
+
+def follow_up_action_label(action) -> str:
+    labels = {
+        "sign_supplement": "补签",
+        "id_supplement": "补证件",
+        "rent_adjust": "改租金",
+        "deposit_adjust": "改押金",
+        "date_correct": "改日期",
+        "phone_call": "电话联系",
+        "wechat": "微信联系",
+        "visit": "上门拜访",
+        "other": "其他",
+    }
+    return labels.get(getattr(action, "value", action), str(action))
 
 
 def filter_contracts(
@@ -193,6 +208,20 @@ def get_review_progress(contracts: List[Contract]) -> List[dict]:
         total = len(c.issues)
         progress = (resolved + ignored) / total * 100 if total > 0 else 100.0
 
+        latest = c.latest_follow_up
+        if latest:
+            latest_action = follow_up_action_label(latest.action)
+            latest_content = latest.content
+            latest_operator = latest.operator
+            latest_time = latest.follow_time[:16].replace("T", " ")
+        else:
+            latest_action = ""
+            latest_content = ""
+            latest_operator = ""
+            latest_time = ""
+
+        change_count = len(c.field_changes)
+
         items.append({
             "合同文件": Path(c.file_path).name,
             "房号": c.room_number,
@@ -204,6 +233,11 @@ def get_review_progress(contracts: List[Contract]) -> List[dict]:
             "已确认/已补充": resolved,
             "已忽略": ignored,
             "处理进度(%)": round(progress, 1),
+            "最近跟进动作": latest_action,
+            "最近跟进内容": latest_content,
+            "跟进负责人": latest_operator,
+            "最近跟进时间": latest_time,
+            "字段变更次数": change_count,
             "备注": c.review_notes,
         })
     items.sort(key=lambda x: (x["处理进度(%)"], x["问题总数"]))
@@ -304,12 +338,56 @@ def export_review_progress(contracts: List[Contract], output_path: str) -> str:
     return output_path
 
 
-def export_all(contracts: List[Contract], output_dir: str, days: int = 30) -> List[str]:
+def export_by_agent(contracts: List[Contract], output_dir: str,
+                    report_types: Optional[List[str]] = None,
+                    days: int = 30, fmt: str = "xlsx") -> List[str]:
+    if report_types is None:
+        report_types = ["pending", "expiring", "summary", "progress"]
+
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     outputs = []
-    outputs.append(export_pending_list(contracts, str(Path(output_dir) / f"待补充清单_{timestamp}.xlsx")))
-    outputs.append(export_expiring_list(contracts, str(Path(output_dir) / f"到期清单_{days}天_{timestamp}.xlsx"), days))
-    outputs.append(export_contract_summary(contracts, str(Path(output_dir) / f"合同摘要_{timestamp}.xlsx")))
-    outputs.append(export_review_progress(contracts, str(Path(output_dir) / f"处理进度表_{timestamp}.xlsx")))
+
+    agents = sorted(set(c.agent_name or "未指定经纪人" for c in contracts))
+
+    for agent in agents:
+        agent_contracts = [c for c in contracts if (c.agent_name or "未指定经纪人") == agent]
+        safe_agent = agent.replace("/", "_").replace("\\", "_").replace(" ", "")
+        agent_dir = Path(output_dir) / safe_agent
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        ext = f".{fmt}"
+
+        if "pending" in report_types:
+            path = str(agent_dir / f"待补充清单_{safe_agent}_{timestamp}{ext}")
+            outputs.append(export_pending_list(agent_contracts, path))
+        if "expiring" in report_types:
+            path = str(agent_dir / f"到期清单_{days}天_{safe_agent}_{timestamp}{ext}")
+            outputs.append(export_expiring_list(agent_contracts, path, days))
+        if "summary" in report_types:
+            path = str(agent_dir / f"合同摘要_{safe_agent}_{timestamp}{ext}")
+            outputs.append(export_contract_summary(agent_contracts, path))
+        if "progress" in report_types:
+            path = str(agent_dir / f"处理进度表_{safe_agent}_{timestamp}{ext}")
+            outputs.append(export_review_progress(agent_contracts, path))
+
+    return outputs
+
+
+def export_all(contracts: List[Contract], output_dir: str, days: int = 30,
+               split_by_agent: bool = False, fmt: str = "xlsx") -> List[str]:
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    outputs = []
+    ext = f".{fmt}"
+
+    outputs.append(export_pending_list(contracts, str(Path(output_dir) / f"待补充清单_{timestamp}{ext}")))
+    outputs.append(export_expiring_list(contracts, str(Path(output_dir) / f"到期清单_{days}天_{timestamp}{ext}"), days))
+    outputs.append(export_contract_summary(contracts, str(Path(output_dir) / f"合同摘要_{timestamp}{ext}")))
+    outputs.append(export_review_progress(contracts, str(Path(output_dir) / f"处理进度表_{timestamp}{ext}")))
+
+    if split_by_agent:
+        agent_dir = Path(output_dir) / "按经纪人拆分"
+        split_outputs = export_by_agent(contracts, str(agent_dir), days=days, fmt=fmt)
+        outputs.extend(split_outputs)
+
     return outputs
