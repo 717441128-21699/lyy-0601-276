@@ -1,0 +1,18 @@
+[project]
+name = "rent-contract-auditor"
+version = "1.0.0"
+description = "租房合同审核命令行工具 - 面向小型中介批量整理合同使用"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1.0",
+    "rich>=13.7.0",
+    "pydantic>=2.5.0",
+    "openpyxl>=3.1.0",
+]
+
+[project.scripts]
+contract-auditor = "main:cli"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
